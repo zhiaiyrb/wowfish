@@ -1,0 +1,5 @@
+.vs/
+fish/bin/Debug
+fish/bin/Release
+fish/obj/
+packages/
