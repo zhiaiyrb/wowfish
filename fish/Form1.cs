@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -13,6 +15,8 @@ using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using Emgu.CV.UI;
 using Emgu.CV.Util;
+using NAudio.CoreAudioApi;
+using NAudio.Wave;
 
 namespace fish
 {
@@ -105,13 +109,49 @@ namespace fish
         private Mat fishFloatMat = null;
         private readonly int screenW = Screen.PrimaryScreen.Bounds.Width;
         private readonly int screenH = Screen.PrimaryScreen.Bounds.Height;
-
+        private IWaveIn captureDevice;
         private bool fishStart = false;
+
+ 
         public Form1()
         {
             InitializeComponent();
             fishFloatMat = CvInvoke.Imread("../piao2.png");
             timer1.Enabled = true;
+            LoadDeviceList();
+        }
+
+        private void LoadDeviceList()
+        {
+            var deviceEnum = new MMDeviceEnumerator();
+            var devices = deviceEnum.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active).ToList();
+
+            comboWasapiDevices.DataSource = devices;
+            comboWasapiDevices.DisplayMember = "FriendlyName";
+
+            var renderDevices = deviceEnum.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).ToList();
+            comboWasapiDevices.DataSource = renderDevices;
+            comboWasapiDevices.DisplayMember = "FriendlyName";
+        }
+
+        private void OnRecordingStopped(object sender, StoppedEventArgs e)
+        {
+           
+        }
+
+        private static int times = 0;
+        private static float totaldb = 0;
+        private void OnDataAvailable(object sender, WaveInEventArgs e)
+        {
+            ushort s = BitConverter.ToUInt16(e.Buffer, 0);
+            totaldb += s / 32768f;
+            times++;
+            if (times == 20)
+            {
+                Console.WriteLine(totaldb.ToString("F"));
+                times = 0;
+                totaldb = 0;
+            }
 
         }
 
@@ -216,12 +256,6 @@ namespace fish
 
             return new Point(x,y);
         }
-
-        private void imageBox1_Click(object sender2, EventArgs e2)
-        {
-
-        }
-
 
 
         private void button2_Click(object sender, EventArgs e)
@@ -365,9 +399,42 @@ namespace fish
             }
         }
 
+        private IWaveIn CreateWaveInDevice()
+        {
+            var device = (MMDevice)comboWasapiDevices.SelectedItem;
+            IWaveIn newWaveIn = new WasapiLoopbackCapture(device);
+            newWaveIn.DataAvailable += OnDataAvailable;
+            newWaveIn.RecordingStopped += OnRecordingStopped;
+            return newWaveIn;
+        }
+
         private void button2_Click_1(object sender, EventArgs e)
         {
-            
+            if (captureDevice != null)
+            {
+                Cleanup();
+            }
+
+            if (captureDevice == null)
+            {
+                captureDevice = CreateWaveInDevice();
+            }
+
+            captureDevice.StartRecording();
+        }
+
+        private void Cleanup()
+        {
+            if (captureDevice != null)
+            {
+                captureDevice.Dispose();
+                captureDevice = null;
+            }
+        }
+
+        private void comboWasapiLoopbackDevices_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }
